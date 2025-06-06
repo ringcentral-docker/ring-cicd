@@ -1,0 +1,126 @@
+name: Build JDK CI/CD Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'jdk*/*/Dockerfile'
+      - '.github/workflows/build-ringcicd-base.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java_version: [17, 21]
+        jdk_distribution: [eclipse-temurin, amazoncorretto]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Docker login
+      env:
+        DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+        DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo $DOCKER_HUB_PASSWORD | docker login --username $DOCKER_HUB_USERNAME --password-stdin
+        echo $GITHUB_TOKEN | docker login ghcr.io --username $GITHUB_ACTOR --password-stdin
+
+    - name: Set Environment Variables
+      id: vars
+      run: |
+        DOCKERFILE_DIR=jdk${{ matrix.java_version }}/${{ matrix.jdk_distribution }}
+        VERSION=jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}-$(date +%Y%m%d)
+        echo "DOCKERFILE_DIR=${DOCKERFILE_DIR}" >> $GITHUB_ENV
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        echo "JDK_VERSION=${{ matrix.java_version }}" >> $GITHUB_ENV
+        echo "JDK_DISTRIBUTION=${{ matrix.jdk_distribution }}" >> $GITHUB_ENV
+
+    - name: Build Docker Image
+      run: |
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+        docker build --tag ${IMAGE_NAME} --file ${DOCKERFILE_DIR}/Dockerfile .
+
+    - name: Tag and Push Docker Images
+      run: |
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+
+        # Push versioned image
+        docker tag "${IMAGE_NAME}" "${IMAGE_NAME}:${VERSION}"
+        docker push "${IMAGE_NAME}:${VERSION}"
+
+        docker tag "${IMAGE_NAME}" "${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}"
+        docker push "${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}"
+
+        # Push latest tag for the specific JDK version and distribution
+        docker tag "${IMAGE_NAME}" "${IMAGE_NAME}:latest"
+        docker push "${IMAGE_NAME}:latest"
+        docker tag "${IMAGE_NAME}" "${GH_DOCKER_PKG_IMAGE_NAME}:latest"
+        docker push "${GH_DOCKER_PKG_IMAGE_NAME}:latest"
+
+    - name: Generate README Update
+      run: |
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+
+        NEW_ENTRY="| JDK ${{ matrix.java_version }} | ${{ matrix.jdk_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
+        echo "${NEW_ENTRY}" > readme_updates_${VERSION}.txt
+
+    - name: Upload README Update
+      uses: actions/upload-artifact@v4
+      with:
+        name: readme-updates-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        path: readme_updates_${VERSION}.txt
+
+  update-readme:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download ALL README Updates
+      uses: actions/download-artifact@v4
+      with:
+        path: ./readme-updates
+
+    - name: Initialize README
+      run: |
+        echo "# Ring CI/CD JDK Images" > README.md
+        echo "" >> README.md
+        echo "This repository contains Docker images for CI/CD pipelines with different JDK versions and distributions." >> README.md
+        echo "" >> README.md
+        echo "## Available Images" >> README.md
+        echo "" >> README.md
+        echo "| JDK Version | Distribution | Version | Docker Hub | GitHub Package |" >> README.md
+        echo "|-------------|--------------|---------|------------|----------------|" >> README.md
+
+    - name: Update README
+      run: |
+        if [ -z "$(find ./readme-updates -type f -name '*.txt' 2>/dev/null)" ]; then
+          echo "No updates found. Skipping README update."
+          exit 0
+        fi
+        for file in ./readme-updates/*/*; do
+          if [ -f "$file" ]; then
+            cat "$file" >> README.md
+          fi
+        done
+
+    - name: Commit README Update
+      run: |
+        git config --global user.name 'john.lin'
+        git config --global user.email 'john.lin@ringcentral.com'
+        git add README.md
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update README with JDK Docker image info [skip ci]"
+          git push
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
