@@ -1,0 +1,88 @@
+plugins {
+    id "java"
+    id "com.softeq.gradle.itest" version "1.0.4"
+    id 'org.jetbrains.kotlin.jvm'
+}
+
+group = 'com.ringcentral'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(22)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.softeq.com/repository/maven-public/' }
+    maven { url 'https://plugins.gradle.org/m2/' }
+}
+
+dependencies {
+    testImplementation 'org.testng:testng:7.10.2'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'io.rest-assured:rest-assured:5.4.0'
+    testImplementation 'org.slf4j:slf4j-simple:2.0.12'
+    testImplementation 'org.apache.kafka:kafka-clients:3.8.0'
+    testImplementation 'org.java-websocket:Java-WebSocket:1.5.6'
+    testImplementation 'redis.clients:jedis:5.1.4'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.17.1'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.1'
+    
+    // Swagger coverage for API testing
+    testImplementation "com.github.viclovsky:swagger-coverage-rest-assured:1.5.0"
+    
+    // Add Lombok dependencies
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+}
+
+test {
+    outputs.cacheIf { false } // disables caching
+
+    systemProperties System.getProperties()
+    useTestNG() {
+        useDefaultListeners = true
+        includeGroups System.getProperty('includeGroups', 'P0,P1,P2')
+        systemProperty 'env', System.getProperty('env', 'ci')
+        // Ensure test failures are properly reported
+        preserveOrder = true
+        groupByInstances = true
+    }
+
+    // Ensure test classes are properly compiled and available
+    testClassesDirs = sourceSets.test.output.classesDirs
+
+    // Configure test failure handling
+    ignoreFailures = false
+    failFast = false
+
+    // Configure test reporting
+    reports {
+        html.required = true
+        junitXml.required = true
+    }
+
+    // Ensure proper test result output
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = false
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
+    }
+}
+
+sourceSets {
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+    }
+}
