@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'jdk*/*/Dockerfile'
-      - 'api-test/*/Dockerfile'
+      - 'api-test/**'
       - '.github/workflows/build-ringcicd-base.yml'
 
 jobs:
