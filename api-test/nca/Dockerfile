@@ -37,7 +37,7 @@ ENV JACOCO_VERSION=${JACOCO_VERSION:-0.8.13}
 COPY ./jacoco/download-jacoco.sh /app/jacoco/download-jacoco.sh
 RUN chmod +x /app/jacoco/download-jacoco.sh && \
     mkdir -p /app/tools/jacoco && \
-    cd /app/jacoco && JACOCO_VERSION=${JACOCO_VERSION} ./download-jacoco.sh && \
+    cd /app/jacoco && JACOCO_VERSION=${JACOCO_VERSION:-0.8.13} ./download-jacoco.sh && \
     mv jacocoagent.jar /app/tools/jacoco/jacocoagent.jar && \
     mv jacococli.jar /app/tools/jacoco/jacococli.jar
 
