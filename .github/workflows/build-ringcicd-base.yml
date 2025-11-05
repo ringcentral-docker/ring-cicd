@@ -115,13 +115,18 @@ jobs:
         GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/${{ matrix.image_name }}-${{ matrix.image_distribution }}
 
         NEW_ENTRY="| JDK ${{ matrix.image_name }} | ${{ matrix.image_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
-        echo "${NEW_ENTRY}" > readme_updates_${VERSION}.txt
+        README_FILE="readme_updates_${VERSION}.txt"
+        echo "${NEW_ENTRY}" > "${README_FILE}"
+        echo "README_FILE=${README_FILE}" >> $GITHUB_ENV
+        echo "Generated README file: ${README_FILE}"
+        ls -la "${README_FILE}"
 
     - name: Upload README Update
       uses: actions/upload-artifact@v4
       with:
         name: readme-updates-${{ matrix.image_name }}-${{ matrix.image_distribution }}
-        path: readme_updates_${VERSION}.txt
+        path: ${{ env.README_FILE }}
+        if-no-files-found: warn
 
   update-readme:
     needs: build
@@ -147,15 +152,21 @@ jobs:
 
     - name: Update README
       run: |
-        if [ -z "$(find ./readme-updates -type f -name '*.txt' 2>/dev/null)" ]; then
-          echo "No updates found. Skipping README update."
-          exit 0
-        fi
-        for file in ./readme-updates/*/*; do
+        echo "Searching for README update files..."
+        find ./readme-updates -type f -name '*.txt' 2>/dev/null | while read file; do
           if [ -f "$file" ]; then
+            echo "Adding entry from: $file"
             cat "$file" >> README.md
           fi
         done
+        
+        if [ ! -s README.md ]; then
+          echo "No updates found. Skipping README update."
+          exit 0
+        fi
+        
+        echo "Updated README content:"
+        cat README.md
 
     - name: Commit README Update
       run: |
