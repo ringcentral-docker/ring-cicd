@@ -6,15 +6,60 @@ on:
       - main
     paths:
       - 'jdk*/*/Dockerfile'
+      - 'api-test/*/Dockerfile'
       - '.github/workflows/build-ringcicd-base.yml'
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Discover Image Configurations
+      id: set-matrix
+      run: |
+        # Initialize matrix array
+        MATRIX_INCLUDE="["
+        FIRST=true
+        
+        # Find all image_name folders (jdk* and api-test)
+        for image_dir in jdk* api-test; do
+          if [ -d "$image_dir" ]; then
+            image_name=$(basename "$image_dir")
+            echo "Processing image_name: $image_name"
+            
+            # Find all distribution subdirectories
+            for dist_dir in "$image_dir"/*; do
+              if [ -d "$dist_dir" ] && [ -f "$dist_dir/Dockerfile" ]; then
+                image_distribution=$(basename "$dist_dir")
+                echo "  Found distribution: $image_distribution"
+                
+                # Add comma separator if not first entry
+                if [ "$FIRST" = false ]; then
+                  MATRIX_INCLUDE="${MATRIX_INCLUDE},"
+                fi
+                FIRST=false
+                
+                # Add matrix entry
+                MATRIX_INCLUDE="${MATRIX_INCLUDE}{\"image_name\":\"${image_name}\",\"image_distribution\":\"${image_distribution}\"}"
+              fi
+            done
+          fi
+        done
+        
+        MATRIX_INCLUDE="${MATRIX_INCLUDE}]"
+        
+        echo "Generated matrix: $MATRIX_INCLUDE"
+        echo "matrix=$MATRIX_INCLUDE" >> $GITHUB_OUTPUT
+
   build:
+    needs: setup
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image_name: [jdk17, jdk21,api-test]
-        jdk_distribution: [eclipse-temurin, amazoncorretto,gmg]
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
       fail-fast: false
 
     steps:
@@ -32,23 +77,23 @@ jobs:
     - name: Set Environment Variables
       id: vars
       run: |
-        DOCKERFILE_DIR=jdk${{ matrix.image_name }}/${{ matrix.jdk_distribution }}
-        VERSION=jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}-$(date +%Y%m%d)
+        DOCKERFILE_DIR=${{ matrix.image_name }}/${{ matrix.image_distribution }}
+        VERSION=${{ matrix.image_name }}-${{ matrix.image_distribution }}-$(date +%Y%m%d)
         echo "DOCKERFILE_DIR=${DOCKERFILE_DIR}" >> $GITHUB_ENV
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
         echo "JDK_VERSION=${{ matrix.image_name }}" >> $GITHUB_ENV
-        echo "JDK_DISTRIBUTION=${{ matrix.jdk_distribution }}" >> $GITHUB_ENV
+        echo "image_distribution=${{ matrix.image_distribution }}" >> $GITHUB_ENV
 
     - name: Build Docker Image
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-${{ matrix.image_name }}-${{ matrix.image_distribution }}
         echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
         docker build --tag ${IMAGE_NAME} --file ${DOCKERFILE_DIR}/Dockerfile .
 
     - name: Tag and Push Docker Images
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
-        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-${{ matrix.image_name }}-${{ matrix.image_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/${{ matrix.image_name }}-${{ matrix.image_distribution }}
 
         # Push versioned image
         docker tag "${IMAGE_NAME}" "${IMAGE_NAME}:${VERSION}"
@@ -65,16 +110,16 @@ jobs:
 
     - name: Generate README Update
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
-        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-${{ matrix.image_name }}-${{ matrix.image_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/${{ matrix.image_name }}-${{ matrix.image_distribution }}
 
-        NEW_ENTRY="| JDK ${{ matrix.image_name }} | ${{ matrix.jdk_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
+        NEW_ENTRY="| JDK ${{ matrix.image_name }} | ${{ matrix.image_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
         echo "${NEW_ENTRY}" > readme_updates_${VERSION}.txt
 
     - name: Upload README Update
       uses: actions/upload-artifact@v4
       with:
-        name: readme-updates-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        name: readme-updates-${{ matrix.image_name }}-${{ matrix.image_distribution }}
         path: readme_updates_${VERSION}.txt
 
   update-readme:
