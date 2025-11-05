@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java_version: [17, 21]
-        jdk_distribution: [eclipse-temurin, amazoncorretto]
+        image_name: [jdk17, jdk21,api-test]
+        jdk_distribution: [eclipse-temurin, amazoncorretto,gmg]
       fail-fast: false
 
     steps:
@@ -32,23 +32,23 @@ jobs:
     - name: Set Environment Variables
       id: vars
       run: |
-        DOCKERFILE_DIR=jdk${{ matrix.java_version }}/${{ matrix.jdk_distribution }}
-        VERSION=jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}-$(date +%Y%m%d)
+        DOCKERFILE_DIR=jdk${{ matrix.image_name }}/${{ matrix.jdk_distribution }}
+        VERSION=jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}-$(date +%Y%m%d)
         echo "DOCKERFILE_DIR=${DOCKERFILE_DIR}" >> $GITHUB_ENV
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
-        echo "JDK_VERSION=${{ matrix.java_version }}" >> $GITHUB_ENV
+        echo "JDK_VERSION=${{ matrix.image_name }}" >> $GITHUB_ENV
         echo "JDK_DISTRIBUTION=${{ matrix.jdk_distribution }}" >> $GITHUB_ENV
 
     - name: Build Docker Image
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
         echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
         docker build --tag ${IMAGE_NAME} --file ${DOCKERFILE_DIR}/Dockerfile .
 
     - name: Tag and Push Docker Images
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
-        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
 
         # Push versioned image
         docker tag "${IMAGE_NAME}" "${IMAGE_NAME}:${VERSION}"
@@ -65,16 +65,16 @@ jobs:
 
     - name: Generate README Update
       run: |
-        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
-        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        IMAGE_NAME=ringcentral/ring-cicd-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
+        GH_DOCKER_PKG_IMAGE_NAME=ghcr.io/ringcentral-docker/ring-cicd/jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
 
-        NEW_ENTRY="| JDK ${{ matrix.java_version }} | ${{ matrix.jdk_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
+        NEW_ENTRY="| JDK ${{ matrix.image_name }} | ${{ matrix.jdk_distribution }} | ${VERSION} | \`${IMAGE_NAME}:${VERSION}\` | \`${GH_DOCKER_PKG_IMAGE_NAME}:${VERSION}\` |"
         echo "${NEW_ENTRY}" > readme_updates_${VERSION}.txt
 
     - name: Upload README Update
       uses: actions/upload-artifact@v4
       with:
-        name: readme-updates-jdk${{ matrix.java_version }}-${{ matrix.jdk_distribution }}
+        name: readme-updates-jdk${{ matrix.image_name }}-${{ matrix.jdk_distribution }}
         path: readme_updates_${VERSION}.txt
 
   update-readme:
