@@ -33,7 +33,7 @@ RUN ./gradlew dependencies --no-daemon --stacktrace --info && \
     ./gradlew --no-daemon --stacktrace --info
 
 # Download Jacoco agent and CLI using updated script
-ENV JACOCO_VERSION=${JACOCO_VERSION}
+ENV JACOCO_VERSION=${JACOCO_VERSION:-0.8.13}
 COPY ./jacoco/download-jacoco.sh /app/jacoco/download-jacoco.sh
 RUN chmod +x /app/jacoco/download-jacoco.sh && \
     mkdir -p /app/tools/jacoco && \
