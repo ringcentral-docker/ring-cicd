@@ -2,7 +2,7 @@
 
 # Download Jacoco agent and CLI
 # Use JACOCO_VERSION from environment variable or default to 0.8.10
-JACOCO_VERSION="${JACOCO_VERSION:-0.8.10}"
+JACOCO_VERSION="${JACOCO_VERSION:-0.8.13}"
 JACOCO_AGENT_URL="https://repo1.maven.org/maven2/org/jacoco/org.jacoco.agent/${JACOCO_VERSION}/org.jacoco.agent-${JACOCO_VERSION}-runtime.jar"
 JACOCO_CLI_URL="https://repo1.maven.org/maven2/org/jacoco/org.jacoco.cli/${JACOCO_VERSION}/org.jacoco.cli-${JACOCO_VERSION}-nodeps.jar"
 

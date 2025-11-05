@@ -1,6 +1,9 @@
 # Build stage: Install dependencies and tools
-ARG JACOCO_VERSION=0.8.13
 FROM ghcr.io/ringcentral-docker/jdk/jdk:22.0.2 AS builder
+
+# Re-declare ARG for use in this stage
+ARG JACOCO_VERSION=0.8.13
+ENV JACOCO_VERSION=${JACOCO_VERSION}
 
 # Install required tools (minimized)
 RUN apt-get update && \
@@ -33,19 +36,16 @@ RUN ./gradlew dependencies --no-daemon --stacktrace --info && \
     ./gradlew --no-daemon --stacktrace --info
 
 # Download Jacoco agent and CLI using updated script
-ENV JACOCO_VERSION=${JACOCO_VERSION:-0.8.13}
+
 COPY ./jacoco/download-jacoco.sh /app/jacoco/download-jacoco.sh
 RUN chmod +x /app/jacoco/download-jacoco.sh && \
     mkdir -p /app/tools/jacoco && \
-    cd /app/jacoco && JACOCO_VERSION=${JACOCO_VERSION:-0.8.13} ./download-jacoco.sh && \
+    cd /app/jacoco && JACOCO_VERSION=${JACOCO_VERSION} ./download-jacoco.sh && \
     mv jacocoagent.jar /app/tools/jacoco/jacocoagent.jar && \
     mv jacococli.jar /app/tools/jacoco/jacococli.jar
 
 # Copy Python script for Jacoco to Cobertura conversion
 COPY .gitlab/jacoco_to_cobertura.py /app/tools/
-
-# Set execution permissions
-RUN chmod +x gradlew
 
 # Create necessary directories
 RUN mkdir -p reports container-classes swagger-coverage-output
